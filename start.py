@@ -1,3 +1,5 @@
+from pprint import pprint
+
 class Direction:
     NORTH = "North"
     SOUTH = "South"
@@ -10,7 +12,8 @@ class Direction:
             return False
 
 class Game:
-    PROMPT = "You are in {{CURRENT_LOCATION}}." + \
+    PROMPT = "=======================================" + \
+    "\nYou are in {{CURRENT_LOCATION}}." + \
     "\n{{DESCRIPTION}}" + \
     "\nBag contents: {{BAG}}" + \
     "\n{{OPTIONS}}" + \
@@ -20,7 +23,7 @@ class Game:
         self.items = items
         self.game_map = game_map
         self.npcs = npcs
-        self.current_location = start_location    #Room object
+        self.current_location = start_location    #Room object 
         self.instructions = instructions
         self.bag = Items()
 
@@ -35,10 +38,32 @@ class Game:
         return self.current_location
 
     def move_room(self, direction):
-        print("move to " + self.current_location.get_door(direction).get_name())
+        print("Moving to " + self.current_location.get_door(direction).get_name() + "\n")
         new_room = self.current_location.get_door(direction)
         self.current_location = new_room
         # announce who is in room
+        # announce item in the room
+
+    def action_take_item_name(self, item_name):
+        if not item_name in self.current_location.what_items():
+            return "You cannot take that."
+        else:
+            item = self.current_location.get_item_by_name(item_name)
+            self.current_location.remove_item(item)
+            self.bag.add_item(item)
+            return f"You put {item_name} in your bag.\n"
+
+    def action_take(self):
+        # TODO: change this to work for more than 1 item per room, this just takes the first one for now
+        l = self.current_location.what_items()
+        if len(l) > 0:
+            name = l.pop()
+            return self.action_take_item_name(name)
+        else:
+            return None
+
+    def action_greet(self):
+        pass
 
     def get_bag(self):
         return self.bag
@@ -50,9 +75,10 @@ class Game:
         self.bag.remove_item(item)
 
     def is_won(self):
+        #TODO: abstract this, take out literals
         return self.current_location == self.game_map.get_room("room2") and self.bag.contains("gem")
 
-        # combine valid directions of travel with other actions into a list of valid actions
+    # combine valid directions of travel with other actions into a list of valid actions
     def get_actions(self):
         doors = self.current_location.get_next_location_list()
         actions = doors + self.instructions 
@@ -71,24 +97,27 @@ class Game:
     def prompt_and_execute(self):
         actions = self.get_actions()
         if self.is_won():
-            print("Yay! You won. Goodbye, come again soon.")
+            print("Yay! You won. Goodbye, come again soon.\n")
             exit
         while(True):
             choice = input(self.get_prompt(actions))
-            choice = choice.upper()
+            choice = choice.split(" ")
+            # print(choice)
+
             ## TODO: give feedback for why a choice didn't work (ie door doesn't exist)
-            if choice not in actions:
+            ## TODO: abstract this so there are no literals and can link actions to functions outside of game class
+            if choice[0].upper() == "QUIT": # TODO fix to ref instead of literal
+                print("Thanks for playing! Come again soon.\n")
+                break
+            elif self.current_location.valid_door(choice[0].upper()):
+                self.move_room(choice[0].upper())
+            elif choice[0].upper() == "TAKE":
+                print(self.action_take())
+            elif choice[0].upper() == "GREET":
+                pass
+            else:
                 print("Not a valid option. Try again\n")
                 continue
-            elif choice == "QUIT": # TODO fix to ref
-                print("Thanks for playing! Come again soon.")
-                break
-            elif Direction.is_direction(choice) and self.current_location.valid_door(choice):
-                self.move_room(choice)
-            elif choice == "TAKE":
-                pass
-            elif choice == "GREET":
-                pass
 
 
 class Room:
@@ -131,6 +160,18 @@ class Room:
 
     def who_is_there(self):
         return who
+
+    def what_items(self):
+        return self.items.get_names()
+
+    def get_item_by_name(self, name):
+        return self.items.get_item_by_name(name)
+
+    def add_item(self, item):
+        self.items.add_item(item)
+
+    def remove_item(self, item):
+        self.items.remove_item(item)
 
     def __str__(self):
         return self.name
@@ -219,11 +260,14 @@ class Items:
     def get_item_by_name(self, name):
         return self.items[name]
 
+    def get_names(self):
+        return list(self.items)
+
     def to_string(self):
         s = ""
         if len(self.items) > 0:
             for i in self.items:
-                s = s + "\n" + i.to_string()
+                s = s + "\n" + self.items[i].to_string()
         else:
             s = "Empty"
         return s
@@ -238,12 +282,15 @@ def make_Castle():
     game_items.add_item(Item("gem", "gem description"))
     game_items.add_item(Item("candlestick", "candlestick description"))
 
+    candle_room_items = Items()
+    candle_room_items.add_item(game_items.get_item_by_name("candlestick"))
+    # pprint(tmp.to_string())
 
     castle_map = Game_Map()
-    castle_map.add_room(Room("room0", [], {}, "0 foobar test description", []))
-    castle_map.add_room(Room("room1", [], {}, "1 foobar test description", []))
-    castle_map.add_room(Room("room2", [game_items.get_item_by_name("candlestick")], {}, "2 foobar test description", []))
-    castle_map.add_room(Room("room3", [], {}, "3 foobar test description", []))
+    castle_map.add_room(Room("room0", Items(), {}, "0 foobar test description", []))
+    castle_map.add_room(Room("room1", Items(), {}, "1 foobar test description", []))
+    castle_map.add_room(Room("room2", candle_room_items, {}, "2 foobar test description", []))
+    castle_map.add_room(Room("room3", Items(), {}, "3 foobar test description", []))
 
     castle_map.connect_room_by_name("room0", "room1", Direction.SOUTH, Direction.NORTH)
     castle_map.connect_room_by_name("room1", "room2", Direction.EAST, Direction.WEST)
@@ -255,22 +302,6 @@ def make_Castle():
         "Woody": NPC("Woody", game_items.get_item_by_name("gem"), castle_map.get_room("room0"),
             lines=Lines(greet="Howdy", answer_yes="Yes indeed", answer_no="I'm afraid not"))
     }
-
-    # locations = {
-    #         "room0": Room("room0", [], {}, "0 foobar test description", []),
-    #         "room1": Room("room1", [], {}, "1 foobar test description", []),
-    #         "room2": Room("room2", [items["candlestick"]], {}, "2 foobar test description", []),
-    # }
-
-    # #TODO: change the ref to self.locations
-    # locations["room0"].set_door(Directions.SOUTH, locations["room1"])
-    # locations["room1"].set_door(Directions.NORTH, locations["room0"])
-
-    # locations["room1"].set_door(Directions.EAST, locations["room2"])
-    # locations["room2"].set_door(Directions.WEST, locations["room1"])
-    
-    # locations["room2"].set_door(Directions.EAST, locations["room0"])
-    # locations["room0"].set_door(Directions.WEST, locations["room2"])
 
     prompt_instructions = ["TAKE", "GREET", "QUIT"]
     g = Game(castle_map, game_items, NPCs, castle_map.get_room("room0"), prompt_instructions)
